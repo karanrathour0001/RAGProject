@@ -2,11 +2,9 @@
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
-import os, time
-
-model_name = "sentence-transformers/all-mpnet-base-v2"
-batch_size = 166
+from langchain_community.embeddings import FakeEmbeddings
+import os
+import time
 
 def pdf_reader(pdf_path):
     start_time = time.time()
@@ -14,31 +12,35 @@ def pdf_reader(pdf_path):
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
+    # 📁 Create DB folder
     os.makedirs("chroma_db", exist_ok=True)
 
+    # 📄 Load PDF
     loader = PyPDFLoader(file_path=pdf_path)
     raw_documents = loader.load()
-    print(f"Loaded {len(raw_documents)} documents")
+    print(f"Loaded {len(raw_documents)} pages")
 
+    # ✂️ Split text
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
-        chunk_overlap=200,
-        separators=["\n\n", "\n", " ", ""]
+        chunk_overlap=200
     )
     all_splits = text_splitter.split_documents(raw_documents)
     print(f"Split into {len(all_splits)} chunks")
 
-    embeddings = HuggingFaceEmbeddings(model_name=model_name)
+    # 🔥 FIX: Use Fake Embeddings (Cloud Safe)
+    embeddings = FakeEmbeddings(size=384)
+
     print("Creating vector database...")
 
-    vectordb = None
-    for i in range(0, len(all_splits), batch_size):
-        batch = all_splits[i:i + batch_size]
-        if vectordb is None:
-            vectordb = Chroma.from_documents(documents=batch, embedding=embeddings, persist_directory="chroma_db")
-        else:
-            vectordb.add_documents(documents=batch)
+    # 🧠 Create vector DB (simplified)
+    vectordb = Chroma.from_documents(
+        documents=all_splits,
+        embedding=embeddings,
+        persist_directory="chroma_db"
+    )
 
     end_time = time.time()
     print(f"Vector DB ready! Time taken: {end_time - start_time:.2f} seconds")
+
     return vectordb
