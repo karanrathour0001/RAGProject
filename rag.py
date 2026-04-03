@@ -1,53 +1,38 @@
 # rag.py
 import streamlit as st
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_groq import ChatGroq
+from groq import Groq
 
-# ✅ Get API key safely
+# ✅ API key from secrets
 api_key = st.secrets.get("GROQ_API_KEY")
 
 if not api_key:
     st.error("❌ GROQ_API_KEY not found in Streamlit Secrets")
     st.stop()
 
-
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
+client = Groq(api_key=api_key)
 
 
 def run(vectordb, query, template):
     try:
-        # 🔍 Retriever
+        # 🔍 Retrieve docs
         retriever = vectordb.as_retriever()
+        docs = retriever.get_relevant_documents(query)
 
-        # 🧠 Prompt
-        prompt = PromptTemplate(
-            template=template,
-            input_variables=["context", "query"]
-        )
+        context = "\n\n".join([doc.page_content for doc in docs])
 
-        # 🤖 LLM
-        llm = ChatGroq(
+        # 🧠 Final prompt
+        final_prompt = template.format(context=context, query=query)
+
+        # 🤖 Direct Groq call
+        response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            groq_api_key=api_key
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": final_prompt}
+            ]
         )
 
-        # 🔗 RAG Chain
-        rag_chain = (
-            {
-                "context": retriever | format_docs,
-                "query": RunnablePassthrough()
-            }
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-
-        # 🚀 Run
-        response = rag_chain.invoke(query)
-        return response
+        return response.choices[0].message.content
 
     except Exception as e:
         return f"❌ Error: {str(e)}"
