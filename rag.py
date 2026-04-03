@@ -14,16 +14,19 @@ client = Groq(api_key=api_key)
 
 def run(vectordb, query, template):
     try:
-        # 🔍 Retrieve docs
+        # 🔍 Retriever
         retriever = vectordb.as_retriever()
-        docs = retriever.get_relevant_documents(query)
 
+        # ✅ FIX: use invoke instead of get_relevant_documents
+        docs = retriever.invoke(query)
+
+        # 🧠 Context build
         context = "\n\n".join([doc.page_content for doc in docs])
 
-        # 🧠 Final prompt
+        # 📝 Prompt
         final_prompt = template.format(context=context, query=query)
 
-        # 🤖 Direct Groq call
+        # 🤖 Groq call
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
